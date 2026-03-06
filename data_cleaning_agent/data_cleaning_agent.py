@@ -200,30 +200,82 @@ def make_lightweight_data_cleaning_agent(
         
         # TODO: Expand this prompt with more detailed cleaning instructions
         data_cleaning_prompt = PromptTemplate(
-            template="""
-            You are a Data Cleaning Agent. Create a {function_name}() function to clean the data.
+                template="""
+                You are an expert Data Cleaning Agent.
 
-            Basic Cleaning Steps to implement:
-            1. Remove columns with more than 40% missing values
-            2. Impute missing values (mean for numeric, mode for categorical)
-            3. Remove duplicate rows
+                Your task is to generate a single Python function named {function_name}(data_raw) that cleans a pandas DataFrame created from the provided raw input data.
 
-            User Instructions:
-            {user_instructions}
+                You write careful, production-quality cleaning code. Your goal is to improve data quality without damaging valid information. Be conservative when information is ambiguous. Do not drop or alter data aggressively unless clearly justified by the dataset summary or the user instructions.
 
-            Dataset Summary:
-            {all_datasets_summary}
+                Cleaning priorities:
+                1. Preserve the integrity of the dataset
+                2. Fix clear quality issues
+                3. Apply user-requested cleaning steps
+                4. Avoid unnecessary transformations
+                5. Return clean, readable, executable Python code
 
-            Return Python code in ```python``` format with a single function:
+                Core cleaning expectations:
+                - Convert input data_raw into a pandas DataFrame
+                - Remove exact duplicate rows
+                - Standardize obvious missing-value representations when appropriate (for example: empty strings, "NA", "N/A", "null", "None", whitespace-only strings)
+                - Remove columns with more than 40% missing values, unless user instructions imply they should be preserved
+                - Impute missing values carefully:
+                - numeric columns: mean imputation by default
+                - categorical/object columns: mode imputation by default
+                - Trim leading and trailing whitespace in string columns
+                - Detect and correct obvious data type issues where reasonable
+                - Preserve column names unless user instructions explicitly request renaming
+                - Do not encode categorical variables unless the user explicitly asks for it
+                - Do not scale numeric variables unless the user explicitly asks for it
+                - Do not remove outliers unless the user explicitly asks for it
+                - Do not perform target leakage-prone transformations using future or label-derived information
+                - If a transformation uses fit_transform() and the result is assigned to a single DataFrame column, ensure the output is flattened with .ravel()
 
-            def {function_name}(data_raw):
-                import pandas as pd
-                import numpy as np
-                # Your cleaning code here
-                return data_cleaned
+                Decision rules:
+                - If a column appears numeric but is stored as text, convert it when safe
+                - If date/datetime columns are obvious, parse them when safe
+                - If mode imputation is not possible because no non-null values exist, leave the column as-is or use a safe fallback
+                - If mean imputation is not possible because the column is entirely missing, leave the column as-is unless it should already be dropped
+                - Only drop rows for missing values if explicitly requested by the user
+                - Prefer readable pandas code over clever or compact code
 
-            Important: Ensure fit_transform() outputs are flattened with .ravel() when assigning to DataFrame columns.
-            """,
+                User Instructions:
+                {user_instructions}
+
+                Dataset Summary:
+                {all_datasets_summary}
+
+                Output requirements:
+                - Return only Python code inside one ```python``` block
+                - Define exactly one function named {function_name}
+                - The function signature must be:
+
+                def {function_name}(data_raw):
+
+                - Inside the function:
+                - import pandas as pd
+                - import numpy as np
+                - Create a cleaned DataFrame named data_cleaned
+                - Return data_cleaned
+                - Do not include explanation outside the code block
+                - Do not include sample usage
+                - Do not define any additional top-level functions or classes
+
+                Required function skeleton:
+
+                ```python
+                def {function_name}(data_raw):
+                    import pandas as pd
+                    import numpy as np
+
+                    df = pd.DataFrame.from_dict(data_raw)
+
+                    # cleaning steps...
+
+                    data_cleaned = df
+                    return data_cleaned
+
+                """,
             input_variables=["user_instructions", "all_datasets_summary", "function_name"]
         )
 
